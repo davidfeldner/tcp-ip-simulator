@@ -55,12 +55,14 @@ func send(port int) {
 	}
 	flags := buf[0]
 	if flags&SYN_ACK == SYN_ACK {
+		fmt.Println("SYN_ACK received")
 		header := make([]byte, 5)
 		header[0] = ACK
 		//acknowledgement shoud be in 1-4 in the buffer
 		for i := 1; i < 5; i++ {
 			header[i] = buf[i]
 		}
+		fmt.Println("sending ACK with acknowledgement")
 		_, err = conn.Write(header)
 		if err != nil {
 			fmt.Println("Error sending ACK:", err)
@@ -95,6 +97,7 @@ func listen(port int) {
 		//if first syn is recevied return syn + ack
 		case flags&SYN == SYN:
 			if state == "" {
+				fmt.Println("SYN received")
 				ConnectionsState.SetState(addr, StateAwatingACK)
 				acknowledgementINT := rand.Uint32()
 				acknowledgementMap[addr.String()] = acknowledgementINT
@@ -108,6 +111,7 @@ func listen(port int) {
 				for i := 1; i < 5; i++ {
 					header[i] = acknowledgementBytes[i-1]
 				}
+				fmt.Println("sending SYN_ACK with acknowledgement")
 				ln.WriteToUDP(header, addr)
 			}
 		//wait next falg should allways be ACK for the same incoming addr
@@ -119,6 +123,7 @@ func listen(port int) {
 				}
 				acknowledgementUINT := binary.BigEndian.Uint32(acknowledgementBytes)
 				if acknowledgementMap[addr.String()] == acknowledgementUINT {
+					fmt.Println("ACK with correct acknowledgement received now ready for data transfer")
 					ConnectionsState.SetState(addr, StateConnectionEstablished)
 				}
 				//TODO: if the acknowledgement number is not the same handle
