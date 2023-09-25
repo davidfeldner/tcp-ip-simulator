@@ -14,7 +14,6 @@ const (
 	FIN     byte = 0b00000100
 	DATA    byte = 0b00001000
 	SYN_ACK byte = 0b00000011
-	//if any bytes are needed it is added here
 )
 
 func main() {
@@ -70,6 +69,8 @@ func pack(toPack *TCPPacket) []byte {
 
 func client(port int) {
 	sequence := rand.Uint32()
+	var sequence_ptr *uint32 = &sequence
+	
 	// Establish a connection
 	conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: port})
 	if err != nil {
@@ -78,60 +79,74 @@ func client(port int) {
 	}
 	defer conn.Close()
 	for {
-		if (clientThreeWayHandshake(conn, sequence)) {break}
+		err := clientThreeWayHandshake(conn, sequence_ptr)
+		if (err != nil) {
+			fmt.Println("Error in handshake:", err)
+		} else {
+			break;
+		}
 	}
 }
 
-func clientThreeWayHandshake(conn *net.UDPConn, sequence uint32) bool {
+func clientThreeWayHandshake(conn *net.UDPConn, sequence *uint32) error {
 	
 	// Send SYN packet
+	err := sendSyn(conn, *sequence)
+	if (err != nil) {return err}
+	*sequence++
+	
+	recv_packet, err := receiveAndVerifySynAck(conn, *sequence)
+	if (err != nil) {return err}
+
+	err = clientSendAck(recv_packet, conn, *sequence)
+	if (err != nil) {return err}
+	*sequence++
+	
+	fmt.Println("Handshake completed with server.")
+	return nil
+}
+
+func sendSyn( conn *net.UDPConn, sequence uint32) error {	
 	packet := &TCPPacket {
 		flags: SYN,
 		sequence: sequence,
 	}
 	
-	bytes := pack(packet)
-	_, err := conn.Write(bytes)
-	sequence++
-	if err != nil {
-		fmt.Println("Error sending SYN:", err)
-		return false
-	}
+	_, err := conn.Write(pack(packet))
+	if err != nil {return err}
 	fmt.Println("Sending SYN to: ", conn.LocalAddr().String())
-	
-	// Await SYN-ACK response
+	return nil
+}
+
+func receiveAndVerifySynAck( conn *net.UDPConn, sequence uint32) (*TCPPacket, error) {
 	buf := make([]byte, 512)
 	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil || n == 0 {
-		fmt.Println("Error reading SYN-ACK:", err)
-		return false
+		return nil, err
 	}
 	recv_packet := unpack(buf)
-	if recv_packet.flags == SYN_ACK {
-		fmt.Println("SYN_ACK received from: ", conn.LocalAddr().String())
-		if (recv_packet.acknowledgement != sequence) {
-			fmt.Println("SYN_ACK ack number did not match sequence")
-			return false
-		}
-		// Send ACK 
-		resp_packet := &TCPPacket {
-			flags: ACK,
-			acknowledgement: recv_packet.sequence+1,
-			sequence: sequence,
-		}
-	
-		fmt.Println("sending ACK with acknowledgement")
-		_, err = conn.Write(pack(resp_packet))
-		sequence++
-		if err != nil {
-			fmt.Println("Error sending ACK:", err)
-			return false
-		}
-		fmt.Println("Handshake completed with server.")
-	} else {
-		fmt.Println("Wrong packet received")
+	if recv_packet.flags != SYN_ACK {
+		return nil, fmt.Errorf("Wrong packet received");
 	}
-	return true
+	
+	fmt.Println("SYN_ACK received from: ", conn.LocalAddr().String())
+	if (recv_packet.acknowledgement != sequence) {
+		return nil, fmt.Errorf("SYN_ACK ack number did not match sequence");
+	}
+	return recv_packet, nil
+}
+
+func clientSendAck(recv_packet *TCPPacket, conn *net.UDPConn, sequence uint32) error {
+	resp_packet := &TCPPacket {
+		flags: ACK,
+		acknowledgement: recv_packet.sequence+1,
+		sequence: sequence,
+	}
+
+	fmt.Println("sending ACK with acknowledgement")
+	_, err := conn.Write(pack(resp_packet))
+	if err != nil {return err}
+	return nil
 }
 
 func server(port int) {
@@ -149,36 +164,38 @@ func server(port int) {
 		var buf [512]byte
 		_, addr, err := conn.ReadFromUDP(buf[0:])
 		if err != nil {
-			// handle error
+			fmt.Print(err)
 		}
 
 		recv_packet := unpack(buf[0:])
-		if (recv_packet.flags == SYN || recv_packet.flags == ACK) {
-			handleNewConnection(recv_packet, sequenceMap, addr, conn)
+		if (recv_packet.flags == SYN) {
+			handleSyn(recv_packet, sequenceMap, addr, conn)
+		} else if (recv_packet.flags == ACK) {
+			handleAck(recv_packet, sequenceMap, addr, conn)
 		}
-		
 	}
 }
 
-func handleNewConnection(recv_packet *TCPPacket, sequenceMap map[string]uint32, addr *net.UDPAddr, conn *net.UDPConn) {
-	if (recv_packet.flags == SYN) {
-		fmt.Println("SYN received")
-		sequenceMap[addr.String()] = rand.Uint32();
-		resp_packet := &TCPPacket {
-			flags: SYN_ACK,
-			acknowledgement: recv_packet.sequence+1,
-			sequence: sequenceMap[addr.String()],
-		}
-		_, err := conn.WriteToUDP(pack(resp_packet), addr)
-		sequenceMap[addr.String()]++
-		if err != nil {
-			fmt.Println("Error sending SYN_ACK:", err)
-			return
-		}
-	} else if (recv_packet.flags == ACK) {
-		if (recv_packet.acknowledgement != sequenceMap[addr.String()]) {
-			fmt.Println("Ack does not match server sequence IP: " + addr.String())
-		}
-		fmt.Println("Connection established with IP: " + addr.String())
+func handleSyn(recv_packet *TCPPacket, sequenceMap map[string]uint32, addr *net.UDPAddr, conn *net.UDPConn) {
+	
+	fmt.Println("SYN received")
+	sequenceMap[addr.String()] = rand.Uint32();
+	resp_packet := &TCPPacket {
+		flags: SYN_ACK,
+		acknowledgement: recv_packet.sequence+1,
+		sequence: sequenceMap[addr.String()],
 	}
+	_, err := conn.WriteToUDP(pack(resp_packet), addr)
+	sequenceMap[addr.String()]++
+	if err != nil {
+		fmt.Println("Error sending SYN_ACK:", err)
+		return
+	}
+}
+
+func handleAck(recv_packet *TCPPacket, sequenceMap map[string]uint32, addr *net.UDPAddr, conn *net.UDPConn) {
+	if (recv_packet.acknowledgement != sequenceMap[addr.String()]) {
+		fmt.Println("Ack does not match server sequence IP: " + addr.String())
+	}
+	fmt.Println("Connection established with IP: " + addr.String())
 }
