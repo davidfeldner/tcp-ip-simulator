@@ -25,6 +25,10 @@ func main() {
 	time.Sleep(50 * time.Second)	
 }
 
+/* ############################
+		TCP SECTION
+   ############################ */
+   
 type TCPPacket struct {
 	flags 		 	byte
 	sequence      	uint32
@@ -66,6 +70,10 @@ func pack(toPack *TCPPacket) []byte {
 	
 	return packet;
 }
+
+/* ############################
+		CLIENT SECTION
+   ############################ */
 
 func client(port int) {
 	sequence := rand.Uint32()
@@ -148,6 +156,10 @@ func clientSendAck(recv_packet *TCPPacket, conn *net.UDPConn, sequence uint32) e
 	if err != nil {return err}
 	return nil
 }
+
+/* ############################
+		SERVER SECTION
+   ############################ */
 
 func server(port int) {
 	sequenceMap := make(map[string]uint32)
