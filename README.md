@@ -12,10 +12,9 @@ You can not expect that behaviour in real life
 ## In case the network changes the order in which messages are delivered, how would you handle message re-ordering?
 If handshake fails the client resends the first syn  
 ## In case messages can be delayed or lost, how does your implementation handle message loss?
-If no ACK is recived the client tries to resend the packet. This is a little different from how the protocol works.
-TCP can handle multiple sends at one time and then order the packages, but because we wait for an ACK for each package.
-If it is delayed and a new packages with the same ACK number is recived a ack is sent again
-On the client when a ACK packet is received
+If no ACK is recived the client tries to resend the SYN packet 10 times waiting 1 second between the send. 
+On the server if the sequence does not match no responce is sent. 
+There is also a timeout such that if any message is missing or delayed the client tries to send again
 
 ## Why is the 3-way handshake important?
 It ensure that both sides are ready to recive data, and establish the sequence numbers

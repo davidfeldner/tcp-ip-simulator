@@ -52,7 +52,7 @@ func pack(toPack *TCPPacket) []byte {
 	sequenceBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(sequenceBytes, toPack.sequence)
 	copy(packet[1:], sequenceBytes)
- 
+
 	acknowledgementBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(acknowledgementBytes, toPack.acknowledgement)
 	copy(packet[5:], acknowledgementBytes)
@@ -156,6 +156,7 @@ func sendSYN(conn *net.UDPConn, sequence *uint32) error {
 
 func receiveAndVerify(conn *net.UDPConn, sequence uint32, flags byte) (*TCPPacket, error) {
 	buf := make([]byte, 512)
+	conn.SetReadDeadline(time.Now().Add(time.Second * 5))
 	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil || n == 0 {
 		return nil, err
