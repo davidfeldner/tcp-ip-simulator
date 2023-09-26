@@ -36,15 +36,6 @@ type TCPPacket struct {
 	data            []byte
 }
 
-func create_tcp_packet(flags byte, sequence uint32, acknowledgement uint32, data []byte) *TCPPacket {
-	return &TCPPacket{
-		flags:           flags,
-		sequence:        sequence,
-		acknowledgement: acknowledgement,
-		data:            data,
-	}
-}
-
 func unpack(buf []byte) *TCPPacket {
 	packet := &TCPPacket{}
 	packet.flags = buf[0]
@@ -61,7 +52,7 @@ func pack(toPack *TCPPacket) []byte {
 	sequenceBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(sequenceBytes, toPack.sequence)
 	copy(packet[1:], sequenceBytes)
-
+ 
 	acknowledgementBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(acknowledgementBytes, toPack.acknowledgement)
 	copy(packet[5:], acknowledgementBytes)
@@ -240,8 +231,6 @@ func handleFIN(recv_packet *TCPPacket, sequenceMap map[string]uint32, addr *net.
 	//send own fin
 	println("Server: Sending FIN")
 	serverSend(recv_packet, sequenceMap, addr, conn, FIN)
-	//wait for ack recived
-
 }
 
 func handleSyn(recv_packet *TCPPacket, sequenceMap map[string]uint32, addr *net.UDPAddr, conn *net.UDPConn) {
@@ -272,5 +261,4 @@ func handleAck(recv_packet *TCPPacket, sequenceMap map[string]uint32, addr *net.
 		fmt.Println("Server: Ack does not match server sequence IP: " + addr.String())
 	}
 	fmt.Println("Server: Received ACK from client: " + addr.String())
-
 }
